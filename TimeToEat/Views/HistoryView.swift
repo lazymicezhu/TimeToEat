@@ -80,7 +80,7 @@ private struct WeekSummary: View {
                         GeometryReader { geo in
                             ZStack(alignment: .bottom) {
                                 Capsule().fill(Color(.tertiarySystemFill))
-                                if stat.total > 0 {
+                                if stat.taken > 0 {
                                     Capsule()
                                         .fill(stat.ratio >= 1 ? Color.accentColor : Color.accentColor.opacity(0.6))
                                         .frame(height: max(6, geo.size.height * stat.ratio))

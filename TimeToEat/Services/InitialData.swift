@@ -1,11 +1,16 @@
 import Foundation
 import SwiftData
 
-/// 带 -demo 启动参数、且还没有任何药品时，写入用户自己的药和 2026-11-05 的服药记录
+/// 首次启动时写入用户自己的三种药，以及 2026-11-05 的服药记录。
+/// 只会写一次：之后即使把药全删了也不会再写回来。带 -demo 启动参数且数据库为空时可强制重新写入。
 @MainActor
-enum DemoData {
+enum InitialData {
+    private static let seededKey = "didSeedInitialData"
+
     static func seedIfNeeded(_ context: ModelContext) {
-        guard LaunchOptions.demo else { return }
+        let defaults = UserDefaults.standard
+        guard LaunchOptions.demo || !defaults.bool(forKey: seededKey) else { return }
+        defaults.set(true, forKey: seededKey)
         let count = (try? context.fetchCount(FetchDescriptor<Medication>())) ?? 0
         guard count == 0 else { return }
 

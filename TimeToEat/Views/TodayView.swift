@@ -164,7 +164,8 @@ private struct SummaryCard: View {
                 .font(.title2.bold())
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-            Text(next.state == .due ? "现在该吃了 · \(next.medication.dosage)" : "还有 \(ScheduleMath.duration(mins)) · \(next.medication.dosage)")
+            let dosage = next.medication.dosage.isEmpty ? "" : " · \(next.medication.dosage)"
+            Text(next.state == .due ? "现在该吃了\(dosage)" : "还有 \(ScheduleMath.duration(mins))\(dosage)")
                 .font(.subheadline.weight(.medium))
                 .opacity(0.9)
         } else if items.isEmpty {

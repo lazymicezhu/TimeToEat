@@ -10,7 +10,7 @@ SwiftUI + SwiftData 的服药提醒 App，iOS 17+。
 xcodegen generate
 ```
 
-模拟器预览时可加启动参数：`-demo`（写入示例药品，仅在没有药品时生效）、`-tab 0/1/2`、`-add`、`-record`。
+模拟器预览时可加启动参数：`-demo`（数据库为空时重新写入内置的三种药和记录；正常首次启动也会自动写入一次）、`-tab 0/1/2`、`-add`、`-record`。
 
 ## 打包 IPA
 
