@@ -1,0 +1,13 @@
+# Xcode / 构建产物
+build/
+DerivedData/
+dist/
+*.ipa
+*.xcarchive
+*.dSYM.zip
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+
+# macOS
+.DS_Store
