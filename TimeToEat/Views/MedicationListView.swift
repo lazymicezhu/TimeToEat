@@ -4,6 +4,7 @@ import SwiftUI
 struct MedicationListView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Medication.createdAt) private var meds: [Medication]
+    @Query private var logs: [DoseLog]
     @State private var editing: Medication?
     @State private var showAdd = LaunchOptions.openAdd
 
@@ -24,7 +25,7 @@ struct MedicationListView: View {
                     List {
                         ForEach(meds) { med in
                             Section {
-                                Button { editing = med } label: { MedicationRow(med: med, now: timeline.date) }
+                                Button { editing = med } label: { MedicationRow(med: med, next: DoseEngine.next(for: med, logs: logs, now: timeline.date), now: timeline.date) }
                                     .buttonStyle(.plain)
                                     .swipeActions {
                                         Button(role: .destructive) { delete(med) } label: { Label("删除", systemImage: "trash") }
@@ -66,6 +67,7 @@ struct MedicationListView: View {
 
 private struct MedicationRow: View {
     let med: Medication
+    let next: NextDose
     let now: Date
 
     var body: some View {
@@ -89,12 +91,9 @@ private struct MedicationRow: View {
                     Text(med.detailLine).font(.subheadline).foregroundStyle(.secondary)
                 }
                 lastDoseLine
-                Label(scheduleText, systemImage: med.mode == .interval ? "timer" : "repeat")
+                Label(med.ruleSummary, systemImage: "timer")
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(med.tint)
-                FlowLayout(spacing: 6) {
-                    ForEach(med.dailyMinutes, id: \.self) { TimeChip(minute: $0, color: med.tint) }
-                }
             }
             Spacer(minLength: 0)
             Image(systemName: "chevron.right")
@@ -109,7 +108,7 @@ private struct MedicationRow: View {
 
     @ViewBuilder
     private var lastDoseLine: some View {
-        if let last = med.lastTaken(before: now) {
+        if let last = next.last {
             HStack(spacing: 6) {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.footnote.weight(.semibold))
@@ -121,20 +120,22 @@ private struct MedicationRow: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(med.tint.opacity(0.10), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            Text("上次：\(ScheduleMath.clock(last))")
+            Text("上次：\(ScheduleMath.clock(last, now: now))")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            if let earliest = next.earliest, !next.isReady(at: now) {
+                Label("下次最早 \(ScheduleMath.clock(earliest, now: now)) 以后", systemImage: "hourglass")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.orange)
+            } else {
+                Label("现在可以吃", systemImage: "checkmark.circle.fill")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.green)
+            }
         } else {
             Label("还没有服药记录", systemImage: "clock")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
-    }
-
-    private var scheduleText: String {
-        if med.mode == .interval {
-            return "\(med.scheduleSummary)（\(ScheduleMath.format(med.intervalStart))–\(ScheduleMath.format(med.intervalEnd))）"
-        }
-        return med.scheduleSummary
     }
 }

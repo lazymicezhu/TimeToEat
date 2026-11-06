@@ -3,6 +3,7 @@ import SwiftData
 import UIKit
 import UserNotifications
 
+/// 到了"下次最早可以吃"的时间就提醒一次
 @MainActor
 final class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationManager()
@@ -46,53 +47,49 @@ final class NotificationManager: NSObject, ObservableObject, UNUserNotificationC
 
     func rescheduleAll(_ context: ModelContext) {
         let meds = (try? context.fetch(FetchDescriptor<Medication>())) ?? []
-        reschedule(meds)
+        let logs = (try? context.fetch(FetchDescriptor<DoseLog>())) ?? []
+        reschedule(meds: meds, logs: logs)
     }
 
-    /// 每个服药时间点注册一个按天重复的本地通知
-    func reschedule(_ meds: [Medication]) {
+    func reschedule(meds: [Medication], logs: [DoseLog], now: Date = .now) {
+        let nexts = DoseEngine.nextDoses(meds.filter(\.remindersOn), logs: logs, now: now)
+            .filter { ($0.earliest ?? .distantPast) > now }
         var requests: [UNNotificationRequest] = []
-        for med in meds where med.isActive && med.remindersOn {
-            for minute in med.dailyMinutes {
-                let content = UNMutableNotificationContent()
-                content.title = "该吃药了 · \(med.name)"
-                content.body = med.detailLine.isEmpty ? "现在是 \(ScheduleMath.format(minute))，记得按时服药" : "\(med.detailLine)，记得按时服药"
-                content.sound = .default
-                content.categoryIdentifier = Self.category
-                content.userInfo = ["medID": med.id.uuidString, "minute": minute]
-                var comps = DateComponents()
-                comps.hour = minute / 60
-                comps.minute = minute % 60
-                let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: true)
-                requests.append(UNNotificationRequest(identifier: "dose-\(med.id.uuidString)-\(minute)", content: content, trigger: trigger))
-            }
+        for group in DoseEngine.groups(nexts, now: now) {
+            guard let date = group.earliest else { continue }
+            let content = makeContent(names: group.names, medIDs: group.items.map(\.medication.id.uuidString))
+            let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+            let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
+            requests.append(UNNotificationRequest(identifier: "next-\(Int(date.timeIntervalSince1970))",
+                                                  content: content, trigger: trigger))
         }
         Task {
             let pending = await center.pendingNotificationRequests()
-            let stale = pending.map(\.identifier).filter { $0.hasPrefix("dose-") }
+            // 也清掉 1.0.x 留下的每日固定提醒
+            let stale = pending.map(\.identifier).filter { $0.hasPrefix("next-") || $0.hasPrefix("dose-") }
             center.removePendingNotificationRequests(withIdentifiers: stale)
-            // iOS 最多保留 64 个待发送通知
-            for r in requests.prefix(60) { try? await center.add(r) }
+            for r in requests { try? await center.add(r) }
         }
     }
 
-    private func snooze(medID: String, minute: Int, day: Date, title: String, body: String) {
+    private func makeContent(names: String, medIDs: [String]) -> UNMutableNotificationContent {
         let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = body
+        content.title = "可以吃药了"
+        content.body = "\(names) 已经到间隔时间，现在可以吃了"
         content.sound = .default
         content.categoryIdentifier = Self.category
-        content.userInfo = ["medID": medID, "minute": minute, "day": day.timeIntervalSince1970]
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 10 * 60, repeats: false)
-        center.add(UNNotificationRequest(identifier: "snooze-\(medID)-\(minute)", content: content, trigger: trigger))
+        content.userInfo = ["medIDs": medIDs, "names": names]
+        return content
     }
 
-    private func handle(action: String, medID: String, minute: Int, day: Date, title: String, body: String) {
+    private func handle(action: String, medIDs: [String], names: String) {
         switch action {
         case Self.takenAction:
-            DoseActions.markTaken(medID: medID, minute: minute, day: day, in: Persistence.container.mainContext)
+            DoseActions.markTaken(medIDs: medIDs, in: Persistence.container.mainContext)
         case Self.snoozeAction:
-            snooze(medID: medID, minute: minute, day: day, title: title, body: body)
+            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 10 * 60, repeats: false)
+            center.add(UNNotificationRequest(identifier: "snooze-\(UUID().uuidString)",
+                                             content: makeContent(names: names, medIDs: medIDs), trigger: trigger))
         default:
             break
         }
@@ -107,18 +104,10 @@ final class NotificationManager: NSObject, ObservableObject, UNUserNotificationC
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
                                             didReceive response: UNNotificationResponse) async {
-        let content = response.notification.request.content
-        let info = content.userInfo
-        guard let medID = info["medID"] as? String, let minute = info["minute"] as? Int else { return }
-        let day: Date
-        if let ts = info["day"] as? Double {
-            day = Date(timeIntervalSince1970: ts)
-        } else {
-            day = response.notification.date
-        }
+        let info = response.notification.request.content.userInfo
+        guard let medIDs = info["medIDs"] as? [String] else { return }
+        let names = info["names"] as? String ?? ""
         let action = response.actionIdentifier
-        let title = content.title
-        let body = content.body
-        await handle(action: action, medID: medID, minute: minute, day: day, title: title, body: body)
+        await handle(action: action, medIDs: medIDs, names: names)
     }
 }

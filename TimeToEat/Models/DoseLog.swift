@@ -6,6 +6,7 @@ enum DoseLogStatus: String, Codable {
     case skipped
 }
 
+/// 一次实际服药
 @Model
 final class DoseLog {
     var scheduledAt: Date = Date()
@@ -24,4 +25,7 @@ final class DoseLog {
         get { DoseLogStatus(rawValue: statusRaw) ?? .taken }
         set { statusRaw = newValue.rawValue }
     }
+
+    /// 实际服药时间
+    var time: Date { takenAt ?? scheduledAt }
 }

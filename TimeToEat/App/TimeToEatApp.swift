@@ -7,7 +7,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         MainActor.assumeIsolated {
             NotificationManager.shared.configure()
             let context = Persistence.container.mainContext
-            InitialData.seedIfNeeded(context)
+            InitialData.prepare(context)
             NotificationManager.shared.rescheduleAll(context)
         }
         return true

@@ -1,80 +1,94 @@
 import Foundation
 
-enum DoseState: Equatable {
-    case taken(Date)
-    case skipped
-    case missed
-    case due
-    case upcoming
+/// 某种药下次最早什么时候能吃
+struct NextDose: Identifiable {
+    let medication: Medication
+    let last: Date?
+    let takenToday: Int
+    /// nil 表示还没吃过，随时可以吃
+    let earliest: Date?
 
-    var isTaken: Bool {
-        if case .taken = self { return true }
-        return false
+    var id: UUID { medication.id }
+
+    func isReady(at now: Date) -> Bool {
+        guard let earliest else { return true }
+        return earliest <= now
     }
-    var isPending: Bool { self == .due || self == .upcoming }
 }
 
-struct DoseItem: Identifiable {
-    let medication: Medication
-    let minute: Int
-    let scheduledAt: Date
-    let log: DoseLog?
-    let state: DoseState
-    /// 不在服药计划里的额外一次（自由录入）
-    var isExtra: Bool = false
+/// 顶部卡片里，最早时间相同的药合并显示
+struct NextGroup: Identifiable {
+    let ready: Bool
+    let earliest: Date?
+    let items: [NextDose]
 
-    var id: String { DoseEngine.key(medication.id, scheduledAt) }
+    var id: String { ready ? "ready" : "\(Int(earliest?.timeIntervalSince1970 ?? 0))" }
+    var names: String { items.map(\.medication.name).joined(separator: "、") }
+    var lastTaken: Date? { items.compactMap(\.last).max() }
+}
+
+/// 同一分钟记录的一次服药（可能同时吃了几种药）
+struct DoseEvent: Identifiable {
+    let time: Date
+    let logs: [DoseLog]
+
+    var id: Date { time }
+    var minute: Int { ScheduleMath.minute(of: time) }
+    var medications: [Medication] {
+        logs.compactMap(\.medication).sorted { $0.createdAt < $1.createdAt }
+    }
 }
 
 enum DoseEngine {
-    /// 前后 30 分钟内算"该吃了"
-    static let dueWindow: TimeInterval = 30 * 60
-
-    static func key(_ medID: UUID, _ date: Date) -> String {
-        "\(medID.uuidString)-\(Int(date.timeIntervalSince1970 / 60))"
+    static func takenTimes(of med: Medication, logs: [DoseLog]) -> [Date] {
+        logs.filter { $0.status == .taken && $0.medication?.id == med.id }.map(\.time)
     }
 
-    static func doses(on day: Date, medications: [Medication], logs: [DoseLog], now: Date = .now) -> [DoseItem] {
+    static func next(for med: Medication, logs: [DoseLog], now: Date = .now) -> NextDose {
         let cal = Calendar.current
-        let dayStart = cal.startOfDay(for: day)
-        guard let dayEnd = cal.date(byAdding: .day, value: 1, to: dayStart) else { return [] }
-
-        var logMap: [String: DoseLog] = [:]
-        for log in logs where log.scheduledAt >= dayStart && log.scheduledAt < dayEnd {
-            if let med = log.medication { logMap[key(med.id, log.scheduledAt)] = log }
-        }
-
-        var items: [DoseItem] = []
-        var used = Set<String>()
-        for med in medications where med.isActive && cal.startOfDay(for: med.createdAt) <= dayStart {
-            for minute in med.dailyMinutes {
-                let at = ScheduleMath.date(minute: minute, on: dayStart)
-                let k = key(med.id, at)
-                let log = logMap[k]
-                if log != nil { used.insert(k) }
-                let state: DoseState
-                if let log {
-                    state = log.status == .taken ? .taken(log.takenAt ?? at) : .skipped
-                } else if at < now.addingTimeInterval(-dueWindow) {
-                    state = .missed
-                } else if at <= now.addingTimeInterval(dueWindow) {
-                    state = .due
-                } else {
-                    state = .upcoming
-                }
-                items.append(DoseItem(medication: med, minute: minute, scheduledAt: at, log: log, state: state))
+        let times = takenTimes(of: med, logs: logs).filter { $0 <= now }
+        let last = times.max()
+        let today = times.filter { cal.isDate($0, inSameDayAs: now) }.count
+        var earliest: Date?
+        if let last {
+            var e = last.addingTimeInterval(TimeInterval(med.minIntervalMinutes * 60))
+            // 当天已经吃满次数，要等到第二天
+            if med.maxPerDay > 0, today >= med.maxPerDay,
+               let tomorrow = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now)) {
+                e = max(e, tomorrow)
             }
+            earliest = e
         }
-        // 没对应到计划时间的记录，作为"计划外"显示
-        for (k, log) in logMap where !used.contains(k) {
-            guard let med = log.medication else { continue }
-            let state: DoseState = log.status == .taken ? .taken(log.takenAt ?? log.scheduledAt) : .skipped
-            items.append(DoseItem(medication: med, minute: ScheduleMath.minute(of: log.scheduledAt),
-                                  scheduledAt: log.scheduledAt, log: log, state: state, isExtra: true))
+        return NextDose(medication: med, last: last, takenToday: today, earliest: earliest)
+    }
+
+    static func nextDoses(_ meds: [Medication], logs: [DoseLog], now: Date = .now) -> [NextDose] {
+        meds.filter(\.isActive)
+            .map { next(for: $0, logs: logs, now: now) }
+            .sorted {
+                let a = $0.earliest ?? .distantPast, b = $1.earliest ?? .distantPast
+                return a == b ? $0.medication.createdAt < $1.medication.createdAt : a < b
+            }
+    }
+
+    static func groups(_ nexts: [NextDose], now: Date) -> [NextGroup] {
+        let ready = nexts.filter { $0.isReady(at: now) }
+        let waiting = nexts.filter { !$0.isReady(at: now) }
+        var result: [NextGroup] = ready.isEmpty ? [] : [NextGroup(ready: true, earliest: nil, items: ready)]
+        let byMinute = Dictionary(grouping: waiting) { ScheduleMath.trimToMinute($0.earliest ?? now) }
+        for key in byMinute.keys.sorted() {
+            let items = (byMinute[key] ?? []).sorted { $0.medication.createdAt < $1.medication.createdAt }
+            result.append(NextGroup(ready: false, earliest: key, items: items))
         }
-        return items.sorted {
-            $0.scheduledAt == $1.scheduledAt ? $0.medication.name < $1.medication.name : $0.scheduledAt < $1.scheduledAt
-        }
+        return result
+    }
+
+    /// 某一天的服药记录，按时间倒序
+    static func events(on day: Date, logs: [DoseLog]) -> [DoseEvent] {
+        let cal = Calendar.current
+        let dayLogs = logs.filter { $0.status == .taken && $0.medication != nil && cal.isDate($0.time, inSameDayAs: day) }
+        let grouped = Dictionary(grouping: dayLogs) { ScheduleMath.trimToMinute($0.time) }
+        return grouped.map { DoseEvent(time: $0.key, logs: $0.value) }.sorted { $0.time > $1.time }
     }
 }
 
@@ -113,20 +127,16 @@ enum DayPeriod: Int, CaseIterable, Identifiable {
 
     struct Group: Identifiable {
         let period: DayPeriod
-        let items: [DoseItem]
+        let events: [DoseEvent]
         var id: Int { period.rawValue }
     }
 
-    /// descending = true 时晚的在上（晚上 → 早上），组内也按时间倒序
-    static func group(_ items: [DoseItem], descending: Bool = false) -> [Group] {
-        let dict = Dictionary(grouping: items) { DayPeriod.of(minute: $0.minute) }
-        let periods = descending ? Array(DayPeriod.allCases.reversed()) : DayPeriod.allCases
-        return periods.compactMap { p in
+    /// 晚的在上：晚上 → 下午 → 中午 → 早上 → 凌晨
+    static func group(_ events: [DoseEvent]) -> [Group] {
+        let dict = Dictionary(grouping: events) { DayPeriod.of(minute: $0.minute) }
+        return DayPeriod.allCases.reversed().compactMap { p in
             guard let list = dict[p], !list.isEmpty else { return nil }
-            let sorted = descending
-                ? list.sorted { $0.scheduledAt == $1.scheduledAt ? $0.medication.createdAt < $1.medication.createdAt : $0.scheduledAt > $1.scheduledAt }
-                : list
-            return Group(period: p, items: sorted)
+            return Group(period: p, events: list.sorted { $0.time > $1.time })
         }
     }
 }

@@ -132,76 +132,29 @@ struct MedicationEditView: View {
 
     private var scheduleSection: some View {
         Section {
-            Picker("方式", selection: $draft.mode) {
-                ForEach(ScheduleMode.allCases) { Text($0.title).tag($0) }
+            Stepper(value: $draft.minIntervalMinutes, in: 30...(48 * 60), step: 30) {
+                Text("两次至少间隔 ").foregroundStyle(.secondary)
+                    + Text(ScheduleMath.duration(draft.minIntervalMinutes)).bold().foregroundStyle(tint)
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .listRowSeparator(.hidden)
-
-            if draft.mode == .timesPerDay {
-                Stepper(value: countBinding, in: 1...8) {
-                    Text("每天 ").foregroundStyle(.secondary) + Text("\(draft.times.count)").bold() + Text(" 次").foregroundStyle(.secondary)
-                }
-                ForEach(Array(draft.times.indices), id: \.self) { i in
-                    DatePicker("第 \(i + 1) 次", selection: timeBinding(index: i), displayedComponents: .hourAndMinute)
-                }
-            } else {
-                Stepper(value: $draft.intervalHours, in: 1...24) {
-                    Text("每隔 ").foregroundStyle(.secondary) + Text("\(draft.intervalHours)").bold() + Text(" 小时一次").foregroundStyle(.secondary)
-                }
-                DatePicker("第一次", selection: minuteBinding($draft.intervalStart), displayedComponents: .hourAndMinute)
-                DatePicker("最晚不超过", selection: minuteBinding($draft.intervalEnd), displayedComponents: .hourAndMinute)
+            Stepper(value: $draft.maxPerDay, in: 1...12) {
+                Text("每天最多 ").foregroundStyle(.secondary)
+                    + Text("\(draft.maxPerDay)").bold().foregroundStyle(tint)
+                    + Text(" 次").foregroundStyle(.secondary)
             }
         } header: {
-            Text("怎么吃")
+            Text("服用间隔")
         } footer: {
-            VStack(alignment: .leading, spacing: 8) {
-                if draft.dailyMinutes.isEmpty {
-                    Text("请设置至少一个服药时间")
-                } else {
-                    Text("每天会在这些时间提醒你（共 \(draft.dailyMinutes.count) 次）：")
-                    FlowLayout(spacing: 6) {
-                        ForEach(draft.dailyMinutes, id: \.self) { TimeChip(minute: $0, color: tint) }
-                    }
-                }
-            }
-            .padding(.top, 4)
+            Text("每次记录服药后，「今天」页会算出下次最早什么时候能吃；当天吃满次数后，要等到第二天。")
         }
     }
 
     private var optionsSection: some View {
         Section {
-            Toggle("到点提醒", isOn: $draft.remindersOn)
+            Toggle("到时间提醒我", isOn: $draft.remindersOn)
             Toggle("正在服用", isOn: $draft.isActive)
         } footer: {
-            Text("暂停后不会出现在「今天」的列表里，也不会再提醒。")
+            Text("打开提醒后，到了最早可以吃的时间会推送通知。暂停服用的药不会出现在「今天」的提示里。")
         }
-    }
-
-    // MARK: Bindings
-
-    private var countBinding: Binding<Int> {
-        Binding(
-            get: { draft.times.count },
-            set: { newCount in
-                withAnimation { draft.times = ScheduleMath.presetTimes(count: newCount) }
-            })
-    }
-
-    private func timeBinding(index: Int) -> Binding<Date> {
-        Binding(
-            get: { ScheduleMath.date(minute: index < draft.times.count ? draft.times[index] : 0, on: .now) },
-            set: { date in
-                guard index < draft.times.count else { return }
-                draft.times[index] = ScheduleMath.minute(of: date)
-            })
-    }
-
-    private func minuteBinding(_ value: Binding<Int>) -> Binding<Date> {
-        Binding(
-            get: { ScheduleMath.date(minute: value.wrappedValue, on: .now) },
-            set: { value.wrappedValue = ScheduleMath.minute(of: $0) })
     }
 
     // MARK: Actions

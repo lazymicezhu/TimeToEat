@@ -3,25 +3,32 @@ import SwiftUI
 
 struct DayStat: Identifiable {
     let day: Date
-    let items: [DoseItem]
+    let events: [DoseEvent]
+
     var id: Date { day }
-    var total: Int { items.count }
-    var taken: Int { items.filter { $0.state.isTaken }.count }
-    var missed: Int { items.filter { $0.state == .missed }.count }
-    var settled: Int { items.filter { !$0.state.isPending }.count }
-    var ratio: Double { total == 0 ? 0 : Double(taken) / Double(total) }
+    var doses: Int { events.reduce(0) { $0 + $1.logs.count } }
+
+    /// "甲硝唑 3 · 阿莫西林 3 · 依托考昔 1"
+    var perMedication: String {
+        let meds = events.flatMap(\.medications)
+        var counts: [UUID: (Medication, Int)] = [:]
+        for m in meds { counts[m.id] = (m, (counts[m.id]?.1 ?? 0) + 1) }
+        return counts.values
+            .sorted { $0.0.createdAt < $1.0.createdAt }
+            .map { "\($0.0.name) \($0.1)" }
+            .joined(separator: " · ")
+    }
 }
 
 struct HistoryView: View {
-    @Query private var meds: [Medication]
     @Query private var logs: [DoseLog]
 
     private var stats: [DayStat] {
         let cal = Calendar.current
         let today = cal.startOfDay(for: .now)
-        return (0..<14).compactMap { offset in
+        return (0..<30).compactMap { offset in
             guard let day = cal.date(byAdding: .day, value: -offset, to: today) else { return nil }
-            return DayStat(day: day, items: DoseEngine.doses(on: day, medications: meds, logs: logs))
+            return DayStat(day: day, events: DoseEngine.events(on: day, logs: logs))
         }
     }
 
@@ -31,7 +38,7 @@ struct HistoryView: View {
             List {
                 Section { WeekSummary(stats: Array(stats.prefix(7).reversed())) }
                 Section("每日记录") {
-                    let days = stats.filter { $0.total > 0 }
+                    let days = stats.filter { $0.doses > 0 }
                     if days.isEmpty {
                         Text("还没有记录").foregroundStyle(.secondary)
                     }
@@ -52,38 +59,41 @@ struct HistoryView: View {
 private struct WeekSummary: View {
     let stats: [DayStat]
 
-    private var rate: Int {
-        let settled = stats.reduce(0) { $0 + $1.settled }
-        let taken = stats.reduce(0) { $0 + $1.taken }
-        return settled == 0 ? 0 : Int((Double(taken) / Double(settled) * 100).rounded())
-    }
-    private var missed: Int { stats.reduce(0) { $0 + $1.missed } }
+    private var total: Int { stats.reduce(0) { $0 + $1.doses } }
+    private var activeDays: Int { stats.filter { $0.doses > 0 }.count }
+    private var maxDoses: Int { max(1, stats.map(\.doses).max() ?? 1) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("近 7 天按时服药").font(.subheadline).foregroundStyle(.secondary)
-                    Text("\(rate)%")
-                        .font(.system(size: 40, weight: .bold, design: .rounded))
-                        .foregroundStyle(Color.accentColor)
+                    Text("近 7 天服药").font(.subheadline).foregroundStyle(.secondary)
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text("\(total)")
+                            .font(.system(size: 40, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color.accentColor)
+                        Text("次").font(.headline).foregroundStyle(.secondary)
+                    }
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 4) {
-                    Text("漏服").font(.subheadline).foregroundStyle(.secondary)
-                    Text("\(missed) 次").font(.title3.bold()).foregroundStyle(missed > 0 ? .orange : .primary)
+                    Text("有记录").font(.subheadline).foregroundStyle(.secondary)
+                    Text("\(activeDays) 天").font(.title3.bold())
                 }
             }
             HStack(alignment: .bottom, spacing: 10) {
                 ForEach(stats) { stat in
                     VStack(spacing: 6) {
+                        Text(stat.doses > 0 ? "\(stat.doses)" : " ")
+                            .font(.caption2.weight(.semibold).monospacedDigit())
+                            .foregroundStyle(.secondary)
                         GeometryReader { geo in
                             ZStack(alignment: .bottom) {
                                 Capsule().fill(Color(.tertiarySystemFill))
-                                if stat.taken > 0 {
+                                if stat.doses > 0 {
                                     Capsule()
-                                        .fill(stat.ratio >= 1 ? Color.accentColor : Color.accentColor.opacity(0.6))
-                                        .frame(height: max(6, geo.size.height * stat.ratio))
+                                        .fill(Color.accentColor)
+                                        .frame(height: max(8, geo.size.height * Double(stat.doses) / Double(maxDoses)))
                                 }
                             }
                         }
@@ -105,50 +115,44 @@ private struct DayRowView: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            ZStack {
-                ProgressRing(progress: stat.ratio, lineWidth: 5, track: Color(.tertiarySystemFill), tint: .accentColor)
-                if stat.taken == stat.total {
-                    Image(systemName: "checkmark").font(.caption.bold()).foregroundStyle(Color.accentColor)
-                }
-            }
-            .frame(width: 34, height: 34)
+            Text("\(stat.doses)")
+                .font(.headline.monospacedDigit())
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 36, height: 36)
+                .background(Color.accentColor.opacity(0.12), in: Circle())
             VStack(alignment: .leading, spacing: 2) {
                 Text(Calendar.current.isDateInToday(stat.day) ? "今天" : Theme.dayTitle(stat.day))
                     .font(.body.weight(.medium))
-                Text(subtitle).font(.caption).foregroundStyle(.secondary)
+                Text(stat.perMedication)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
             Spacer()
-            Text("\(stat.taken)/\(stat.total)")
+            Text("\(stat.events.count) 回")
                 .font(.subheadline.monospacedDigit())
                 .foregroundStyle(.secondary)
         }
-    }
-
-    private var subtitle: String {
-        var parts = ["已服 \(stat.taken) 次"]
-        if stat.missed > 0 { parts.append("漏服 \(stat.missed) 次") }
-        return parts.joined(separator: " · ")
     }
 }
 
 struct DayDetailView: View {
     let day: Date
-    @Environment(\.modelContext) private var context
-    @Query private var meds: [Medication]
     @Query private var logs: [DoseLog]
-    @State private var selected: DoseItem?
+    @State private var editing: DoseEvent?
     @State private var showRecord = false
 
     var body: some View {
-        let items = DoseEngine.doses(on: day, medications: meds, logs: logs)
+        let events = DoseEngine.events(on: day, logs: logs)
         ScrollView {
             VStack(spacing: 10) {
-                ForEach(items) { item in
-                    DoseRow(item: item, now: .now,
-                            onToggle: { withAnimation(.snappy) { DoseActions.toggleTaken(item, in: context) } },
-                            onOpen: { selected = item })
+                ForEach(events) { event in
+                    EventRow(event: event).onTapGesture { editing = event }
                 }
-                Text("点右侧圆圈补记或撤销，点卡片可修改服药时间")
+                if events.isEmpty {
+                    Text("这天没有服药记录").foregroundStyle(.secondary).padding(.top, 40)
+                }
+                Text("点记录可以修改时间或删除，右上角 + 可以补记")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .padding(.top, 8)
@@ -164,7 +168,7 @@ struct DayDetailView: View {
                     .accessibilityLabel("补记服药")
             }
         }
-        .sheet(item: $selected) { DoseDetailSheet(item: $0) }
+        .sheet(item: $editing) { RecordDoseSheet(event: $0) }
         .sheet(isPresented: $showRecord) {
             RecordDoseSheet(initialTime: Calendar.current.isDateInToday(day) ? .now : ScheduleMath.date(minute: 12 * 60, on: day))
         }

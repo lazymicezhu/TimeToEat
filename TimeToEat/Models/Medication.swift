@@ -1,17 +1,12 @@
 import Foundation
 import SwiftData
 
+/// 旧版（1.0.x）的固定时间表方式，仅用于升级时推算间隔
 enum ScheduleMode: String, Codable, CaseIterable, Identifiable {
     case timesPerDay
     case interval
 
     var id: String { rawValue }
-    var title: String {
-        switch self {
-        case .timesPerDay: return "每天几次"
-        case .interval: return "隔多久一次"
-        }
-    }
 }
 
 @Model
@@ -22,12 +17,16 @@ final class Medication {
     var note: String = ""
     var iconName: String = "pills.fill"
     var colorName: String = "teal"
+    // 旧版固定时间表字段
     var modeRaw: String = "timesPerDay"
-    /// 每天固定时间（距 0 点的分钟数）
     var times: [Int] = [480]
     var intervalHours: Int = 8
     var intervalStart: Int = 480
     var intervalEnd: Int = 1320
+    /// 两次服药至少间隔多少分钟
+    var minIntervalMinutes: Int = 360
+    /// 每天最多吃几次
+    var maxPerDay: Int = 3
     var remindersOn: Bool = true
     var isActive: Bool = true
     var createdAt: Date = Date()
@@ -44,26 +43,16 @@ final class Medication {
         set { modeRaw = newValue.rawValue }
     }
 
-    /// 每天需要服药的时间点（分钟）
-    var dailyMinutes: [Int] {
+    var legacyDailyMinutes: [Int] {
         ScheduleMath.minutes(mode: mode, times: times, intervalHours: intervalHours,
                              start: intervalStart, end: intervalEnd)
-    }
-
-    var scheduleSummary: String {
-        ScheduleMath.summary(mode: mode, count: dailyMinutes.count, intervalHours: intervalHours)
     }
 
     var detailLine: String {
         [dosage, note].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
-    /// 最近一次实际服药时间
-    func lastTaken(before now: Date = .now) -> Date? {
-        (logs ?? [])
-            .filter { $0.status == .taken }
-            .compactMap(\.takenAt)
-            .filter { $0 <= now }
-            .max()
+    var ruleSummary: String {
+        "至少隔 \(ScheduleMath.duration(minIntervalMinutes)) · 每天最多 \(maxPerDay) 次"
     }
 }

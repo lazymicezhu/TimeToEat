@@ -7,11 +7,8 @@ struct MedicationDraft {
     var note = ""
     var iconName = "pills.fill"
     var colorName = "teal"
-    var mode: ScheduleMode = .timesPerDay
-    var times: [Int] = [8 * 60]
-    var intervalHours = 8
-    var intervalStart = 8 * 60
-    var intervalEnd = 22 * 60
+    var minIntervalMinutes = 6 * 60
+    var maxPerDay = 3
     var remindersOn = true
     var isActive = true
 
@@ -23,11 +20,8 @@ struct MedicationDraft {
         note = m.note
         iconName = m.iconName
         colorName = m.colorName
-        mode = m.mode
-        times = m.times.isEmpty ? [8 * 60] : m.times.sorted()
-        intervalHours = m.intervalHours
-        intervalStart = m.intervalStart
-        intervalEnd = m.intervalEnd
+        minIntervalMinutes = m.minIntervalMinutes
+        maxPerDay = m.maxPerDay
         remindersOn = m.remindersOn
         isActive = m.isActive
     }
@@ -38,21 +32,13 @@ struct MedicationDraft {
         m.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
         m.iconName = iconName
         m.colorName = colorName
-        m.mode = mode
-        m.times = times.sorted()
-        m.intervalHours = intervalHours
-        m.intervalStart = intervalStart
-        m.intervalEnd = intervalEnd
+        m.minIntervalMinutes = minIntervalMinutes
+        m.maxPerDay = maxPerDay
         m.remindersOn = remindersOn
         m.isActive = isActive
     }
 
-    var dailyMinutes: [Int] {
-        ScheduleMath.minutes(mode: mode, times: times, intervalHours: intervalHours,
-                             start: intervalStart, end: intervalEnd)
-    }
-
     var isValid: Bool {
-        !name.trimmingCharacters(in: .whitespaces).isEmpty && !dailyMinutes.isEmpty
+        !name.trimmingCharacters(in: .whitespaces).isEmpty
     }
 }

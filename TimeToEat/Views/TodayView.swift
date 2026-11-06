@@ -8,49 +8,37 @@ struct TodayView: View {
     @ObservedObject private var notifier = NotificationManager.shared
     @State private var showAdd = false
     @State private var showRecord = LaunchOptions.openRecord
-    @State private var selected: DoseItem?
-    @State private var successTick = 0
+    @State private var editing: DoseEvent?
+    @State private var deleting: DoseEvent?
 
     var body: some View {
         NavigationStack {
             TimelineView(.periodic(from: .now, by: 30)) { timeline in
                 let now = timeline.date
-                let items = DoseEngine.doses(on: now, medications: meds, logs: logs, now: now)
+                let nexts = DoseEngine.nextDoses(meds, logs: logs, now: now)
+                let events = DoseEngine.events(on: now, logs: logs)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
-                        SummaryCard(items: items, now: now)
+                        if meds.isEmpty {
+                            emptyState
+                        } else {
+                            if !nexts.isEmpty { NextDoseCard(nexts: nexts, now: now) }
 
-                        if !meds.isEmpty {
                             Button { showRecord = true } label: {
                                 Label("记录一次服药", systemImage: "plus.circle.fill")
                                     .font(.headline)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 4)
                             }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.borderedProminent)
                             .controlSize(.large)
                             .buttonBorderShape(.roundedRectangle(radius: 16))
-                        }
 
-                        if notifier.status == .notDetermined || notifier.status == .denied, !meds.isEmpty {
-                            NotificationPrompt(denied: notifier.status == .denied)
-                        }
-
-                        if items.isEmpty {
-                            emptyState
-                        } else {
-                            ForEach(DayPeriod.group(items, descending: true)) { group in
-                                VStack(alignment: .leading, spacing: 10) {
-                                    Label(group.period.title, systemImage: group.period.icon)
-                                        .font(.subheadline.weight(.semibold))
-                                        .foregroundStyle(.secondary)
-                                        .padding(.leading, 4)
-                                    ForEach(group.items) { item in
-                                        DoseRow(item: item, now: now, onToggle: { toggle(item) }, onOpen: { selected = item })
-                                            .contextMenu { menu(for: item) }
-                                    }
-                                }
+                            if notifier.status == .notDetermined || notifier.status == .denied {
+                                NotificationPrompt(denied: notifier.status == .denied)
                             }
+
+                            records(events)
                         }
                     }
                     .padding(.horizontal)
@@ -67,8 +55,53 @@ struct TodayView: View {
             }
             .sheet(isPresented: $showAdd) { MedicationEditView(medication: nil) }
             .sheet(isPresented: $showRecord) { RecordDoseSheet() }
-            .sheet(item: $selected) { DoseDetailSheet(item: $0) }
-            .sensoryFeedback(.success, trigger: successTick)
+            .sheet(item: $editing) { RecordDoseSheet(event: $0) }
+            .confirmationDialog("删除这次服药记录？", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+                                titleVisibility: .visible) {
+                Button("删除", role: .destructive) {
+                    if let deleting { withAnimation { DoseActions.delete(deleting, in: context) } }
+                    deleting = nil
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func records(_ events: [DoseEvent]) -> some View {
+        let total = events.reduce(0) { $0 + $1.logs.count }
+        HStack(alignment: .firstTextBaseline) {
+            Text("今天的服药记录").font(.title3.bold())
+            Spacer()
+            if total > 0 {
+                Text("共 \(total) 次").font(.subheadline).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.top, 4)
+
+        if events.isEmpty {
+            Text("今天还没有记录。吃完药点上面的「记录一次服药」，填上吃药的时间就行。")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
+                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        } else {
+            ForEach(DayPeriod.group(events)) { group in
+                VStack(alignment: .leading, spacing: 10) {
+                    Label(group.period.title, systemImage: group.period.icon)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, 4)
+                    ForEach(group.events) { event in
+                        EventRow(event: event)
+                            .onTapGesture { editing = event }
+                            .contextMenu {
+                                Button { editing = event } label: { Label("修改", systemImage: "pencil") }
+                                Button(role: .destructive) { deleting = event } label: { Label("删除", systemImage: "trash") }
+                            }
+                    }
+                }
+            }
         }
     }
 
@@ -77,9 +110,8 @@ struct TodayView: View {
             Image(systemName: "pills.circle.fill")
                 .font(.system(size: 56))
                 .foregroundStyle(Color.accentColor)
-            Text(meds.isEmpty ? "还没有添加药品" : "今天没有服药安排")
-                .font(.headline)
-            Text("添加你常吃的药，设置每天几次或隔多久一次，到点就会提醒你。")
+            Text("还没有添加药品").font(.headline)
+            Text("添加你常吃的药，设好两次之间至少隔多久。每次吃完记一下，就会告诉你下次最早什么时候能吃。")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -92,60 +124,31 @@ struct TodayView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 40)
     }
-
-    @ViewBuilder
-    private func menu(for item: DoseItem) -> some View {
-        Button { selected = item } label: { Label("修改服药时间", systemImage: "clock") }
-        if !item.state.isTaken {
-            Button { toggle(item) } label: { Label("标记已服用", systemImage: "checkmark.circle") }
-        }
-        if item.state != .skipped && !item.isExtra {
-            Button { withAnimation { DoseActions.skip(item, in: context) } } label: { Label("跳过这次", systemImage: "forward") }
-        }
-        if item.log != nil {
-            Button(role: .destructive) { withAnimation { DoseActions.reset(item, in: context) } } label: {
-                Label("撤销记录", systemImage: "arrow.uturn.backward")
-            }
-        }
-    }
-
-    private func toggle(_ item: DoseItem) {
-        let wasTaken = item.state.isTaken
-        withAnimation(.snappy) { DoseActions.toggleTaken(item, in: context) }
-        if !wasTaken { successTick += 1 }
-    }
 }
 
-private struct SummaryCard: View {
-    let items: [DoseItem]
+/// 顶部卡片：下次最早什么时候可以吃
+private struct NextDoseCard: View {
+    let nexts: [NextDose]
     let now: Date
 
-    private var taken: Int { items.filter { $0.state.isTaken }.count }
-    private var missed: Int { items.filter { $0.state == .missed }.count }
-    private var next: DoseItem? { items.first { $0.state.isPending } }
-
     var body: some View {
-        HStack(spacing: 20) {
-            ZStack {
-                ProgressRing(progress: items.isEmpty ? 0 : Double(taken) / Double(items.count), lineWidth: 9)
-                VStack(spacing: 0) {
-                    Text("\(taken)")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
-                    Text("/ \(items.count)")
-                        .font(.caption.weight(.medium))
-                        .opacity(0.8)
-                }
-                .monospacedDigit()
+        let groups = DoseEngine.groups(nexts, now: now)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("下次最早可以吃").font(.footnote.weight(.semibold))
+                Spacer()
+                Text(Theme.dayTitle(now)).font(.footnote.weight(.medium))
             }
-            .frame(width: 86, height: 86)
+            .opacity(0.85)
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text(Theme.dayTitle(now))
-                    .font(.footnote.weight(.medium))
-                    .opacity(0.85)
-                content
+            if let first = groups.first { headline(first) }
+
+            if groups.count > 1 {
+                Rectangle().fill(.white.opacity(0.25)).frame(height: 1)
+                VStack(spacing: 10) {
+                    ForEach(groups.dropFirst()) { row($0) }
+                }
             }
-            Spacer(minLength: 0)
         }
         .padding(20)
         .foregroundStyle(.white)
@@ -154,29 +157,58 @@ private struct SummaryCard: View {
     }
 
     @ViewBuilder
-    private var content: some View {
-        if let next {
-            let mins = Int(next.scheduledAt.timeIntervalSince(now) / 60)
-            Text("下一次 \(ScheduleMath.format(next.minute))")
-                .font(.caption.weight(.semibold))
-                .opacity(0.85)
-            Text(next.medication.name)
-                .font(.title2.bold())
+    private func headline(_ g: NextGroup) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if g.ready {
+                Text("现在就可以吃")
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
+            } else if let earliest = g.earliest {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(ScheduleMath.dayPrefix(earliest, now: now))
+                        .font(.headline)
+                        .opacity(0.9)
+                    Text(ScheduleMath.format(ScheduleMath.minute(of: earliest)))
+                        .font(.system(size: 48, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                    Text("以后")
+                        .font(.headline)
+                        .opacity(0.9)
+                }
+            }
+            Text(g.names)
+                .font(.title3.bold())
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+            Group {
+                if let earliest = g.earliest, !g.ready {
+                    Text("还要等 \(ScheduleMath.remaining(until: earliest, now: now))")
+                } else if let last = g.lastTaken {
+                    Text("距上次服药已过 \(ScheduleMath.elapsed(since: last, now: now))")
+                } else {
+                    Text("还没有服药记录")
+                }
+            }
+            .font(.subheadline.weight(.medium))
+            .opacity(0.9)
+        }
+    }
+
+    private func row(_ g: NextGroup) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(g.names)
+                .font(.subheadline.weight(.semibold))
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            let dosage = next.medication.dosage.isEmpty ? "" : " · \(next.medication.dosage)"
-            Text(next.state == .due ? "现在该吃了\(dosage)" : "还有 \(ScheduleMath.duration(mins))\(dosage)")
-                .font(.subheadline.weight(.medium))
-                .opacity(0.9)
-        } else if items.isEmpty {
-            Text("今天没有服药安排").font(.title3.bold())
-        } else if taken == items.count {
-            Text("今天的药都吃完啦").font(.title3.bold())
-            Text("继续保持 👏").font(.subheadline).opacity(0.9)
-        } else {
-            Text("今天的提醒都结束了").font(.title3.bold())
-            if missed > 0 {
-                Text("有 \(missed) 次还没记录，记得补上").font(.subheadline).opacity(0.9)
+            Spacer(minLength: 8)
+            if g.ready {
+                Text("现在可以吃").font(.subheadline.weight(.semibold))
+            } else if let earliest = g.earliest {
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text("\(ScheduleMath.clock(earliest, now: now)) 以后")
+                        .font(.subheadline.weight(.semibold).monospacedDigit())
+                    Text("还要 \(ScheduleMath.remaining(until: earliest, now: now))")
+                        .font(.caption)
+                        .opacity(0.85)
+                }
             }
         }
     }
@@ -194,7 +226,7 @@ private struct NotificationPrompt: View {
                 .background(Color.orange.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text(denied ? "通知已关闭" : "开启服药提醒").font(.subheadline.weight(.semibold))
-                Text(denied ? "在设置里打开通知，才能准时提醒你" : "到点推送通知，可直接点「已服用」")
+                Text(denied ? "在设置里打开通知，到时间才能提醒你" : "到了最早可以吃的时间就通知你")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
