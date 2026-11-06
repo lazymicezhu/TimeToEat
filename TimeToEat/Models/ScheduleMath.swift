@@ -74,4 +74,10 @@ enum ScheduleMath {
     static func clock(_ date: Date, now: Date = .now) -> String {
         "\(dayPrefix(date, now: now)) \(format(minute(of: date)))"
     }
+
+    /// 今天的只显示 "22:05"，其他天带前缀 "明天 04:08"
+    static func shortClock(_ date: Date, now: Date = .now) -> String {
+        let t = format(minute(of: date))
+        return Calendar.current.isDate(date, inSameDayAs: now) ? t : "\(dayPrefix(date, now: now)) \(t)"
+    }
 }

@@ -68,5 +68,10 @@ enum InitialData {
         DoseActions.record([etoricoxib], at: at(12, 47), in: context)
         DoseActions.record([metronidazole, amoxicillin], at: at(17, 28), in: context)
         DoseActions.record([metronidazole, amoxicillin], at: at(23, 8), in: context)
+
+        // 仅用于截图对比：模拟两种抗生素 2 小时前刚吃过
+        if LaunchOptions.args.contains("-scenario") {
+            DoseActions.record([metronidazole, amoxicillin], at: Date.now.addingTimeInterval(-122 * 60), in: context)
+        }
     }
 }

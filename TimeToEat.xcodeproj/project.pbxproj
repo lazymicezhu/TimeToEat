@@ -25,6 +25,7 @@
 		C9025273B23541EB8A8BE8B5 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05DC6E6160BEC87518CA215F /* Theme.swift */; };
 		E4EF5258CF811B6E8384A385 /* TimeToEatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8242606711CB564CC7F15B84 /* TimeToEatApp.swift */; };
 		EAB63608A4671A9F5AD89DA9 /* InitialData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 492895E39B1DE660A9FDC83E /* InitialData.swift */; };
+		F3E84C670E27C2FBF7063D24 /* NextDoseCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A8D819C3CC51C87E1BD0B42 /* NextDoseCard.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -36,6 +37,7 @@
 		3FB31A37448C091513025F99 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		486C2DDE2BE6F6B1F2E64E13 /* DoseLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoseLog.swift; sourceTree = "<group>"; };
 		492895E39B1DE660A9FDC83E /* InitialData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InitialData.swift; sourceTree = "<group>"; };
+		5A8D819C3CC51C87E1BD0B42 /* NextDoseCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NextDoseCard.swift; sourceTree = "<group>"; };
 		68A03F24F21FEFC4085E2763 /* TimeToEat.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TimeToEat.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7F0E0E02A39B2A266A9B0F20 /* ScheduleMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleMath.swift; sourceTree = "<group>"; };
 		8242606711CB564CC7F15B84 /* TimeToEatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeToEatApp.swift; sourceTree = "<group>"; };
@@ -89,6 +91,7 @@
 				A8721990E4FD3BCA921530B1 /* HistoryView.swift */,
 				AC8FA74D04CB72A23001F2CD /* MedicationEditView.swift */,
 				1EB3075F1849526D84B17DE2 /* MedicationListView.swift */,
+				5A8D819C3CC51C87E1BD0B42 /* NextDoseCard.swift */,
 				98B6E0E03235783D37A1D320 /* RecordSheets.swift */,
 				05DC6E6160BEC87518CA215F /* Theme.swift */,
 				A978F308AE8C29160EF5EEAA /* TodayView.swift */,
@@ -204,6 +207,7 @@
 				97667457D7E4070C6D858170 /* MedicationDraft.swift in Sources */,
 				1F185D24DB417F8A7DF6FEC8 /* MedicationEditView.swift in Sources */,
 				194B8D70F5BA09D20F36CEE3 /* MedicationListView.swift in Sources */,
+				F3E84C670E27C2FBF7063D24 /* NextDoseCard.swift in Sources */,
 				156C42F65145BBF63C31C7C5 /* NotificationManager.swift in Sources */,
 				53C32333E31AC97817A58A68 /* Persistence.swift in Sources */,
 				5B6077904E3FE537AEAE5FEB /* RecordSheets.swift in Sources */,
@@ -223,14 +227,14 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = 2R4WYUF984;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "按时吃药";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.lazymice.TimeToEat;
 				PRODUCT_NAME = TimeToEat;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -261,14 +265,14 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = 2R4WYUF984;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "按时吃药";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.lazymice.TimeToEat;
 				PRODUCT_NAME = TimeToEat;
 				TARGETED_DEVICE_FAMILY = 1;

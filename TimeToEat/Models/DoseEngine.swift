@@ -14,6 +14,12 @@ struct NextDose: Identifiable {
         guard let earliest else { return true }
         return earliest <= now
     }
+
+    /// 从上次服药到最早可吃，已经过去了多少（0...1）
+    func progress(at now: Date) -> Double {
+        guard let last, let earliest, earliest > last else { return 1 }
+        return min(1, max(0, now.timeIntervalSince(last) / earliest.timeIntervalSince(last)))
+    }
 }
 
 /// 顶部卡片里，最早时间相同的药合并显示
