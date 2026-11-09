@@ -52,3 +52,23 @@ struct MedIcon: View {
             .background(color.opacity(0.15), in: RoundedRectangle(cornerRadius: size * 0.32, style: .continuous))
     }
 }
+
+/// 「跨天凌晨」印章：过了 0 点、算在前一天的那次服药
+struct CrossDayStamp: View {
+    private let red = Color(red: 0.84, green: 0.22, blue: 0.18)
+
+    var body: some View {
+        Text("跨天凌晨")
+            .font(.system(size: 11, weight: .heavy))
+            .tracking(1)
+            .foregroundStyle(red)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .overlay(RoundedRectangle(cornerRadius: 4).stroke(red, lineWidth: 1.5))
+            .padding(2)
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(red.opacity(0.6), lineWidth: 0.8))
+            .rotationEffect(.degrees(-12))
+            .opacity(0.9)
+            .accessibilityLabel("跨天凌晨，算在前一天")
+    }
+}

@@ -24,6 +24,9 @@ struct EventRow: View {
             }
 
             Spacer(minLength: 0)
+            if ScheduleMath.isCrossDay(event.time) {
+                CrossDayStamp()
+            }
             Image(systemName: "chevron.right")
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(.tertiary)

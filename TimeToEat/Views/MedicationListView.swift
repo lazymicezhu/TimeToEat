@@ -120,17 +120,10 @@ private struct MedicationRow: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(med.tint.opacity(0.10), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            Text("上次：\(ScheduleMath.clock(last, now: now))")
-                .font(.caption)
-                .foregroundStyle(.secondary)
             if let earliest = next.earliest, !next.isReady(at: now) {
                 Label("下次最早 \(ScheduleMath.clock(earliest, now: now)) 以后", systemImage: "hourglass")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.orange)
-            } else {
-                Label("现在可以吃", systemImage: "checkmark.circle.fill")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.green)
             }
         } else {
             Label("还没有服药记录", systemImage: "clock")

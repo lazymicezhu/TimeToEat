@@ -43,6 +43,11 @@ enum ScheduleMath {
         return cal.date(byAdding: .day, value: -1, to: start) ?? start
     }
 
+    /// 过了 0 点、但还算在前一天里吃的（凌晨 0 点到 3 点）
+    static func isCrossDay(_ date: Date) -> Bool {
+        doseDay(of: date) != Calendar.current.startOfDay(for: date)
+    }
+
     static func isSameDoseDay(_ a: Date, _ b: Date) -> Bool {
         doseDay(of: a) == doseDay(of: b)
     }
