@@ -25,7 +25,7 @@ struct HistoryView: View {
 
     private var stats: [DayStat] {
         let cal = Calendar.current
-        let today = cal.startOfDay(for: .now)
+        let today = ScheduleMath.doseDay(of: .now)
         return (0..<30).compactMap { offset in
             guard let day = cal.date(byAdding: .day, value: -offset, to: today) else { return nil }
             return DayStat(day: day, events: DoseEngine.events(on: day, logs: logs))
@@ -98,9 +98,9 @@ private struct WeekSummary: View {
                             }
                         }
                         .frame(height: 80)
-                        Text(Calendar.current.isDateInToday(stat.day) ? "今" : stat.day.formatted(.dateTime.weekday(.narrow).locale(Theme.zh)))
+                        Text(ScheduleMath.isDoseToday(stat.day) ? "今" : stat.day.formatted(.dateTime.weekday(.narrow).locale(Theme.zh)))
                             .font(.caption2.weight(.medium))
-                            .foregroundStyle(Calendar.current.isDateInToday(stat.day) ? Color.accentColor : .secondary)
+                            .foregroundStyle(ScheduleMath.isDoseToday(stat.day) ? Color.accentColor : .secondary)
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -121,7 +121,7 @@ private struct DayRowView: View {
                 .frame(width: 36, height: 36)
                 .background(Color.accentColor.opacity(0.12), in: Circle())
             VStack(alignment: .leading, spacing: 2) {
-                Text(Calendar.current.isDateInToday(stat.day) ? "今天" : Theme.dayTitle(stat.day))
+                Text(ScheduleMath.isDoseToday(stat.day) ? "今天" : Theme.dayTitle(stat.day))
                     .font(.body.weight(.medium))
                 Text(stat.perMedication)
                     .font(.caption)
@@ -170,7 +170,7 @@ struct DayDetailView: View {
         }
         .sheet(item: $editing) { RecordDoseSheet(event: $0) }
         .sheet(isPresented: $showRecord) {
-            RecordDoseSheet(initialTime: Calendar.current.isDateInToday(day) ? .now : ScheduleMath.date(minute: 12 * 60, on: day))
+            RecordDoseSheet(initialTime: ScheduleMath.isDoseToday(day) ? .now : ScheduleMath.date(minute: 12 * 60, on: day))
         }
     }
 }

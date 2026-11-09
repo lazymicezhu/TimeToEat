@@ -51,16 +51,15 @@ enum DoseEngine {
     }
 
     static func next(for med: Medication, logs: [DoseLog], now: Date = .now) -> NextDose {
-        let cal = Calendar.current
         let times = takenTimes(of: med, logs: logs).filter { $0 <= now }
         let last = times.max()
-        let today = times.filter { cal.isDate($0, inSameDayAs: now) }.count
+        let today = times.filter { ScheduleMath.isSameDoseDay($0, now) }.count
         var earliest: Date?
         if let last {
             var e = last.addingTimeInterval(TimeInterval(med.minIntervalMinutes * 60))
-            // 当天已经吃满次数，要等到第二天
+            // 当天已经吃满次数，要等到第二天凌晨 3 点
             if med.maxPerDay > 0, today >= med.maxPerDay,
-               let tomorrow = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now)) {
+               let tomorrow = ScheduleMath.nextDoseDayStart(after: now) {
                 e = max(e, tomorrow)
             }
             earliest = e
@@ -89,17 +88,17 @@ enum DoseEngine {
         return result
     }
 
-    /// 某一天的服药记录，按时间倒序
+    /// 某一天的服药记录，按时间倒序（凌晨 3 点前的算前一天）
     static func events(on day: Date, logs: [DoseLog]) -> [DoseEvent] {
-        let cal = Calendar.current
-        let dayLogs = logs.filter { $0.status == .taken && $0.medication != nil && cal.isDate($0.time, inSameDayAs: day) }
+        let target = ScheduleMath.doseDay(of: day)
+        let dayLogs = logs.filter { $0.status == .taken && $0.medication != nil && ScheduleMath.doseDay(of: $0.time) == target }
         let grouped = Dictionary(grouping: dayLogs) { ScheduleMath.trimToMinute($0.time) }
         return grouped.map { DoseEvent(time: $0.key, logs: $0.value) }.sorted { $0.time > $1.time }
     }
 }
 
 enum DayPeriod: Int, CaseIterable, Identifiable {
-    case dawn, morning, noon, afternoon, evening
+    case dawn, morning, noon, afternoon, evening, lateNight
 
     var id: Int { rawValue }
     var title: String {
@@ -109,6 +108,7 @@ enum DayPeriod: Int, CaseIterable, Identifiable {
         case .noon: return "中午"
         case .afternoon: return "下午"
         case .evening: return "晚上"
+        case .lateNight: return "深夜"
         }
     }
     var icon: String {
@@ -118,12 +118,14 @@ enum DayPeriod: Int, CaseIterable, Identifiable {
         case .noon: return "sun.max.fill"
         case .afternoon: return "sun.haze.fill"
         case .evening: return "moon.fill"
+        case .lateNight: return "moon.zzz.fill"
         }
     }
 
     static func of(minute: Int) -> DayPeriod {
         switch minute / 60 {
-        case 0..<5: return .dawn
+        case 0..<ScheduleMath.dayStartHour: return .lateNight  // 过了 0 点但还算前一天
+        case ScheduleMath.dayStartHour..<5: return .dawn
         case 5..<11: return .morning
         case 11..<14: return .noon
         case 14..<18: return .afternoon
@@ -137,7 +139,7 @@ enum DayPeriod: Int, CaseIterable, Identifiable {
         var id: Int { period.rawValue }
     }
 
-    /// 晚的在上：晚上 → 下午 → 中午 → 早上 → 凌晨
+    /// 晚的在上：深夜 → 晚上 → 下午 → 中午 → 早上 → 凌晨
     static func group(_ events: [DoseEvent]) -> [Group] {
         let dict = Dictionary(grouping: events) { DayPeriod.of(minute: $0.minute) }
         return DayPeriod.allCases.reversed().compactMap { p in

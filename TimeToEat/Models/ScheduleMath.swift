@@ -32,6 +32,33 @@ enum ScheduleMath {
         return (c.hour ?? 0) * 60 + (c.minute ?? 0)
     }
 
+    /// 一天从凌晨 3 点开始算：0 点到 3 点之间吃的药归到前一天
+    static let dayStartHour = 3
+
+    /// 某个时刻属于哪一天的服药（返回那天的 0 点）
+    static func doseDay(of date: Date) -> Date {
+        let cal = Calendar.current
+        let start = cal.startOfDay(for: date)
+        guard cal.component(.hour, from: date) < dayStartHour else { return start }
+        return cal.date(byAdding: .day, value: -1, to: start) ?? start
+    }
+
+    static func isSameDoseDay(_ a: Date, _ b: Date) -> Bool {
+        doseDay(of: a) == doseDay(of: b)
+    }
+
+    /// 是不是「今天」的服药日（凌晨 3 点前仍算前一天）
+    static func isDoseToday(_ day: Date, now: Date = .now) -> Bool {
+        isSameDoseDay(day, now)
+    }
+
+    /// 下一个服药日开始的时刻（第二天凌晨 3 点）
+    static func nextDoseDayStart(after now: Date) -> Date? {
+        let cal = Calendar.current
+        guard let next = cal.date(byAdding: .day, value: 1, to: doseDay(of: now)) else { return nil }
+        return cal.date(bySettingHour: dayStartHour, minute: 0, second: 0, of: next)
+    }
+
     static func trimToMinute(_ date: Date) -> Date {
         Date(timeIntervalSince1970: (date.timeIntervalSince1970 / 60).rounded(.down) * 60)
     }
