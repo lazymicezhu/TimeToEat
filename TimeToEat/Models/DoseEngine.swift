@@ -88,9 +88,11 @@ enum DoseEngine {
         return result
     }
 
-    /// 某一天的服药记录，按时间倒序（凌晨 3 点前的算前一天）
+    /// 某一天的服药记录，按时间倒序。
+    /// day 是日历日本身（例如 11 月 8 日 0 点），这天的记录包括次日凌晨 3 点前吃的药。
+    /// 要按「现在」取今天的记录，先用 ScheduleMath.doseDay(of: now) 换算。
     static func events(on day: Date, logs: [DoseLog]) -> [DoseEvent] {
-        let target = ScheduleMath.doseDay(of: day)
+        let target = Calendar.current.startOfDay(for: day)
         let dayLogs = logs.filter { $0.status == .taken && $0.medication != nil && ScheduleMath.doseDay(of: $0.time) == target }
         let grouped = Dictionary(grouping: dayLogs) { ScheduleMath.trimToMinute($0.time) }
         return grouped.map { DoseEvent(time: $0.key, logs: $0.value) }.sorted { $0.time > $1.time }

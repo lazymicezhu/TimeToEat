@@ -47,9 +47,10 @@ enum ScheduleMath {
         doseDay(of: a) == doseDay(of: b)
     }
 
-    /// 是不是「今天」的服药日（凌晨 3 点前仍算前一天）
+    /// 某一天（日历日，传哪个时刻都行）是不是现在所在的服药日。
+    /// 注意 day 表示「这一天」本身，不会再按 3 点往前推，所以传 0 点也没问题。
     static func isDoseToday(_ day: Date, now: Date = .now) -> Bool {
-        isSameDoseDay(day, now)
+        Calendar.current.startOfDay(for: day) == doseDay(of: now)
     }
 
     /// 下一个服药日开始的时刻（第二天凌晨 3 点）

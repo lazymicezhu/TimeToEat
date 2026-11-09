@@ -16,7 +16,7 @@ struct TodayView: View {
             TimelineView(.periodic(from: .now, by: 30)) { timeline in
                 let now = timeline.date
                 let nexts = DoseEngine.nextDoses(meds, logs: logs, now: now)
-                let events = DoseEngine.events(on: now, logs: logs)
+                let events = DoseEngine.events(on: ScheduleMath.doseDay(of: now), logs: logs)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
                         if meds.isEmpty {
